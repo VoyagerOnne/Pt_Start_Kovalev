@@ -1,0 +1,11 @@
+# Файл pgpass для Ansible
+
+pg_repl_user: repl_user   # Логин пользователя для репликации
+pg_repl_password: qwe  # Пароль для пользователя репликации
+
+db_host: "{{ hostvars['db']['ansible_host'] }}"     # Хост основной базы данных
+db_port: 5432             # Порт для подключения
+db_name: db_personal_data      # Название базы данных
+
+pg_admin_user: postgres   # Логин администратора базы данных (для создания репликации)
+pg_admin_password: qwe  # Пароль администратора базы данных

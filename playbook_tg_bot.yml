@@ -1,0 +1,152 @@
+---
+- name: Playbook to setup PostgreSQL with replication and Telegram bot
+  hosts: all
+  become: true
+
+  vars_files:
+    - ./pgpass  # Переменные для доступа к базе данных
+
+  tasks:
+    - name: Install basic dependencies
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - git
+        - curl
+        - python3
+        - python3-pip
+        - python3-venv
+        - postgresql
+        - postgresql-contrib
+        - python3-psycopg2
+
+    - name: Ensure that PostgreSQL is installed
+      apt:
+        name: postgresql
+        state: present
+      when: "'db' in inventory_hostname or 'db_repl' in inventory_hostname"
+
+    - name: Configure pg_hba.conf
+      template:
+        src: ./pg_hba.conf
+        dest: /etc/postgresql/16/main/pg_hba.conf.ansible
+      notify:
+        - Restart PostgreSQL
+      when: "'db' in inventory_hostname or 'db_repl' in inventory_hostname"
+
+    - name: Initialize database and replication setup on the primary DB
+      block:
+        - name: Setup primary DB configuration
+          template:
+            src: ./config-postgresql
+            dest: /etc/postgresql/16/main/postgresql.conf.ansible
+          notify:
+            - Restart PostgreSQL
+
+        - name: exec_conf
+          shell: |
+            cat /etc/postgresql/16/main/postgresql.conf.ansible >> /etc/postgresql/16/main/postgresql.conf;
+            cat /etc/postgresql/16/main/pg_hba.conf.ansible >> /etc/postgresql/16/main/pg_hba.conf
+          notify:
+            - Restart PostgreSQL
+
+        - name: Set PostgreSQL password for user
+          shell: |
+            sudo -u postgres psql -c "ALTER USER {{ pg_admin_user }} WITH PASSWORD '{{ pg_admin_password }}';"
+
+        - name: Create replication user
+          become_user: postgres
+          postgresql_user:
+            name: repl_user
+            password: "{{ pg_repl_password }}"
+            role_attr_flags: "REPLICATION"
+
+      when: inventory_hostname == 'db'
+
+    - name: Create database
+      become_user: postgres
+      postgresql_db:
+        name: "{{ db_name }}"
+        login_user: "{{ pg_admin_user }}"
+        login_password: "{{ pg_admin_password }}"
+      when: inventory_hostname == 'db'
+
+    - name: Create phone_numbers table
+      become_user: postgres
+      postgresql_query:
+        db: "{{ db_name }}"
+        login_user: "{{ pg_admin_user }}"
+        login_password: "{{ pg_admin_password }}"
+        query: "CREATE TABLE IF NOT EXISTS phone_numbers (id SERIAL PRIMARY KEY, phone VARCHAR(15));"
+      when: inventory_hostname == 'db'
+
+    - name: Create emails table
+      become_user: postgres
+      postgresql_query:
+        db: "{{ db_name }}"
+        login_user: "{{ pg_admin_user }}"
+        login_password: "{{ pg_admin_password }}"
+        query: "CREATE TABLE IF NOT EXISTS emails (id SERIAL PRIMARY KEY, email VARCHAR(255));"
+      when: inventory_hostname == 'db'
+
+    - name: Configure replication on secondary DB
+      block:
+        - name: Remove old data directory
+          become_user: postgres
+          file:
+            path: /var/lib/postgresql/16/main
+            state: absent
+
+        - name: Setup base backup for replication
+          become_user: postgres
+          shell: |
+            pg_basebackup -h {{ db_host }} -D /var/lib/postgresql/16/main -U repl_user -vP
+
+        - name: Start secondary DB with replication
+          become_user: postgres
+          shell: |
+            echo "standby_mode = 'on'" >> /var/lib/postgresql/16/main/recovery.conf
+          notify:
+            - Restart PostgreSQL
+      when: "'db_repl' in inventory_hostname"
+
+    - name: Download and setup Telegram bot
+      block:
+        - name: Clone the bot repository
+          git:
+            repo: 'https://github.com/VoyagerOnne/Pt_Start_Kovalev.git'
+            dest: /opt/tg_bot
+          when: "'bot' in inventory_hostname"
+
+        - name: Setup Python virtual environment for the bot
+          shell: |
+            python3 -m venv /opt/tg_bot/venv
+            /opt/tg_bot/venv/bin/pip install -r /opt/tg_bot/requirements.txt
+            sudo /opt/tg_bot/venv/bin/python3 /opt/tg_bot/bot.py
+          ignore_errors: yes
+          when: "'bot' in inventory_hostname"
+
+        - name: Create systemd service for the bot
+          template:
+            src: ./bot.service.j2
+            dest: /etc/systemd/system/tg_bot.service
+          notify:
+            - Reload systemd
+            - Start Telegram bot
+      when: "'bot' in inventory_hostname"
+
+  handlers:
+    - name: Restart PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Start Telegram bot
+      service:
+        name: tg_bot
+        state: started
