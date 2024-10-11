@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: bot_container
+    env_file: .env
+    depends_on:
+      - db
+    networks:
+      botnet:
+        ipv4_address: 192.168.1.10
+
+  db:
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    container_name: "${DB_HOST}"
+    env_file: .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - /var/log/postgresql_bot:/var/log/postgresql:rw
+      - ./data/master:/var/lib/postgresql/data
+      - ./archive/master:/oracle/pg_data/archive
+    networks:
+      botnet:
+        ipv4_address: 192.168.1.11
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_HOST_AUTH_METHOD: 'trust'
+      DB_REPL_HOST: ${DB_REPL_HOST}.botnet
+      DB_REPL_USER: ${DB_REPL_USER}
+      DB_REPL_PASSWORD: ${DB_REPL_PASSWORD}
+
+  db_replica:
+    build:
+      context: ./db_repl
+      dockerfile: Dockerfile
+    container_name: '${DB_REPL_HOST}'
+    env_file: .env
+    depends_on:
+      - db
+    volumes:
+      - ./data/replica:/var/lib/postgresql/data
+      - ./logs/replica:/var/log/postgresql
+    networks:
+      botnet:
+        ipv4_address: 192.168.1.12
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}.botnet
+      REPLICATOR_USER: ${DB_REPL_USER}
+      REPLICATOR_PASSWORD: ${DB_REPL_PASSWORD}
+      DB_HOST: ${DB_HOST}
+
+networks:
+  botnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
+volumes:
+  db_data:

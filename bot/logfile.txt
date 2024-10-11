@@ -1,0 +1,10 @@
+2024-10-09 22:18:38,820 - apscheduler.scheduler - INFO - Scheduler started
+2024-10-09 22:18:45,067 - paramiko.transport - INFO - Connected (version 2.0, client OpenSSH_9.9p1)
+2024-10-09 22:18:45,225 - paramiko.transport - INFO - Authentication (password) successful!
+2024-10-09 22:19:17,283 - telegram.ext.updater - INFO - Received signal 2 (SIGINT), stopping...
+2024-10-09 22:19:17,284 - apscheduler.scheduler - INFO - Scheduler has been shut down
+2024-10-09 22:19:21,799 - telegram.ext.updater - WARNING - Exiting immediately!
+2024-10-10 22:02:43,510 - apscheduler.scheduler - INFO - Scheduler started
+2024-10-10 22:02:56,029 - telegram.ext.updater - INFO - Received signal 2 (SIGINT), stopping...
+2024-10-10 22:02:56,029 - apscheduler.scheduler - INFO - Scheduler has been shut down
+2024-10-10 22:02:56,984 - telegram.ext.updater - WARNING - Exiting immediately!
