@@ -338,7 +338,7 @@ def get_services(update: Update, context):
 
 def get_repl_logs(update: Update, context):
     try:
-        log = client_connect_and_execute('cat /var/log/postgresql_bot/postgresql.log | grep "repl"').split('\n')
+        log = client_connect_and_execute('cat /var/log/postgresql_bot/postgresql.log | grep "repl" -a ').split('\n')
         update.message.reply_text('Последние 20 логов')
         for i in log[-20:]:
             update.message.reply_text(i)
